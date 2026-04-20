@@ -14,8 +14,8 @@
 - [x] `[Code]` 2026-04-19 — Add `brian-email` to `config/mcp.json` in brian-telegram (port 8768, SSE); added `src/serve.js` + `src/server.js` factory
 
 ### Build & Infrastructure
-- [ ] `[Code]` Add GHCR build-push workflow — migrate container from `node:20-alpine` to a versioned GHCR image (`ghcr.io/aldarondo/...`) with GitHub Actions auto-deploy
-- [ ] `[Code]` Add weekly scheduled rebuild — GitHub Actions `schedule: cron` to repull and push a fresh image every week, picking up base-image security patches
+- [x] `[Code]` 2026-04-20 — Add GHCR build-push workflow — `.github/workflows/build.yml`; builds on push to main + weekly Sunday 08:00 UTC; deploys to NAS via cloudflared tunnel; `NAS_SSH_PASSWORD` secret set
+- [x] `[Code]` 2026-04-20 — Add weekly scheduled rebuild — included in build.yml `schedule: cron: "0 8 * * 0"`
 
 ### Enhancements
 - [x] `[Code]` 2026-04-19 — Add `list_drafts` tool — Gmail API OAuth (read-only scope); `src/gmail-api.js` + `src/authorize.js` interactive token flow; requires `[Human]` to create Google OAuth2 Desktop credential and run `node src/authorize.js`
