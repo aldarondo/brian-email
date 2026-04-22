@@ -67,7 +67,8 @@ export async function listDrafts({ limit = 10, query = '' } = {}) {
           date:     header('Date')    || '',
           snippet:  data.message?.snippet ?? '',
         };
-      } catch {
+      } catch (err) {
+        console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', message: 'draft_fetch_failed', id: d.id, error: err.message }));
         return { id: d.id, subject: '(error reading draft)', to: '', date: '', snippet: '' };
       }
     })

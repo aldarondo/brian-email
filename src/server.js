@@ -12,16 +12,16 @@ import { sendEmail, verifyConnection } from './mailer.js';
 import { listDrafts } from './gmail-api.js';
 import { log } from './logger.js';
 
-const RATE_LIMIT = parseInt(process.env.EMAIL_RATE_LIMIT_PER_HOUR || '20', 10);
 const sendTimestamps = [];
 
 function checkRateLimit() {
+  const limit = parseInt(process.env.EMAIL_RATE_LIMIT_PER_HOUR || '20', 10);
   const cutoff = Date.now() - 60 * 60 * 1000;
   const recent = sendTimestamps.filter(ts => ts > cutoff);
   sendTimestamps.length = 0;
   sendTimestamps.push(...recent);
-  if (recent.length >= RATE_LIMIT) {
-    throw new Error(`Rate limit exceeded: max ${RATE_LIMIT} emails/hour`);
+  if (recent.length >= limit) {
+    throw new Error(`Rate limit exceeded: max ${limit} emails/hour`);
   }
   sendTimestamps.push(Date.now());
 }
@@ -102,7 +102,8 @@ export function createServer() {
         }
 
         case 'list_drafts': {
-          const limit = args?.limit ?? 10;
+          const rawLimit = args?.limit ?? 10;
+          const limit = Math.min(Math.max(Math.trunc(Number(rawLimit)), 1), 100);
           const query = args?.query ?? '';
           const drafts = await listDrafts({ limit, query });
           if (!drafts.length) {
@@ -120,7 +121,7 @@ export function createServer() {
           throw new Error(`Unknown tool: ${name}`);
       }
     } catch (err) {
-      log('error', 'tool_error', { tool: name, error: err.message });
+      log('error', 'tool_error', { tool: name, error: err.message, stack: err.stack });
       return {
         content: [{ type: 'text', text: `❌ Error: ${err.message}` }],
         isError: true,

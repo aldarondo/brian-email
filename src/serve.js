@@ -6,12 +6,14 @@
 import express from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createServer } from './server.js';
+import { requireApiKey } from './middleware.js';
 
 const PORT = parseInt(process.env.PORT || '8768', 10);
+
 const app = express();
 const transports = new Map();
 
-app.get('/sse', async (req, res) => {
+app.get('/sse', requireApiKey, async (req, res) => {
   const transport = new SSEServerTransport('/messages', res);
   transports.set(transport.sessionId, transport);
   res.on('close', () => transports.delete(transport.sessionId));
@@ -19,7 +21,7 @@ app.get('/sse', async (req, res) => {
   await server.connect(transport);
 });
 
-app.post('/messages', express.json(), async (req, res) => {
+app.post('/messages', express.json(), requireApiKey, async (req, res) => {
   const transport = transports.get(req.query.sessionId);
   if (!transport) return res.status(404).json({ error: 'Session not found' });
   await transport.handlePostMessage(req, res);
