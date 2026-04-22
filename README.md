@@ -79,9 +79,23 @@ The server is registered in `brian-telegram/config/mcp.json` as `"email"`:
 | `GMAIL_FROM_NAME` | No | Display name in From header (default: `Brian`) |
 | `PORT` | No | SSE server port (default: `8768`) |
 | `EMAIL_RATE_LIMIT_PER_HOUR` | No | Max emails per hour (default: `20`) |
+| `LOG_FILE` | No | Path to log file inside container (default: none; set to `/logs/brian-email.log` in docker-compose) |
+| `LOG_MAX_SIZE_MB` | No | Max log file size before rotation in MB (default: `10`) |
+| `LOG_MAX_FILES` | No | Number of rotated log files to keep (default: `5`) |
 | `GMAIL_OAUTH_CLIENT_ID` | No | OAuth2 client ID (for `list_drafts` only) |
 | `GMAIL_OAUTH_CLIENT_SECRET` | No | OAuth2 client secret (for `list_drafts` only) |
 | `GMAIL_OAUTH_REFRESH_TOKEN` | No | OAuth2 refresh token (for `list_drafts` only) |
+
+## Logging
+
+Each tool call, successful send, and error is logged as a JSON line to both stderr and (when `LOG_FILE` is set) a file on the host.
+
+In the Docker deployment, logs are written to `./logs/brian-email.log` on the NAS via a bind mount. The file rotates when it reaches `LOG_MAX_SIZE_MB` and up to `LOG_MAX_FILES` rotated copies are kept (e.g. `brian-email.log.1` … `brian-email.log.5`), capping total disk usage at ~60 MB with defaults.
+
+```bash
+# Tail logs on the NAS
+tail -f logs/brian-email.log | jq .
+```
 
 ## OAuth2 Setup (list_drafts only)
 
