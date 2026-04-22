@@ -10,6 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { sendEmail, verifyConnection } from './mailer.js';
 import { listDrafts } from './gmail-api.js';
+import { log } from './logger.js';
 
 const RATE_LIMIT = parseInt(process.env.EMAIL_RATE_LIMIT_PER_HOUR || '20', 10);
 const sendTimestamps = [];
@@ -77,6 +78,7 @@ export function createServer() {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    log('info', 'tool_call', { tool: name, to: args?.to, subject: args?.subject });
     try {
       switch (name) {
         case 'send_email': {
@@ -86,6 +88,7 @@ export function createServer() {
           if (!body) throw new Error('"body" is required');
           checkRateLimit();
           const result = await sendEmail({ to, subject, text: body, html });
+          log('info', 'email_sent', { to, subject, messageId: result.messageId });
           return {
             content: [{ type: 'text', text: `✅ Email sent — messageId: ${result.messageId}` }],
           };
@@ -117,6 +120,7 @@ export function createServer() {
           throw new Error(`Unknown tool: ${name}`);
       }
     } catch (err) {
+      log('error', 'tool_error', { tool: name, error: err.message });
       return {
         content: [{ type: 'text', text: `❌ Error: ${err.message}` }],
         isError: true,
