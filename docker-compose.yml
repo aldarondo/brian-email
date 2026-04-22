@@ -13,6 +13,8 @@ services:
       - GMAIL_OAUTH_CLIENT_SECRET=${GMAIL_OAUTH_CLIENT_SECRET:-}
       - GMAIL_OAUTH_REFRESH_TOKEN=${GMAIL_OAUTH_REFRESH_TOKEN:-}
       - LOG_FILE=/logs/brian-email.log
+      - LOG_MAX_SIZE_MB=${LOG_MAX_SIZE_MB:-10}
+      - LOG_MAX_FILES=${LOG_MAX_FILES:-5}
     volumes:
       - ./logs:/logs
     command: node src/serve.js
