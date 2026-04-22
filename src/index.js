@@ -11,7 +11,9 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
+import { validateEnv } from './validate-env.js';
 
+validateEnv();
 const server = createServer();
 const transport = new StdioServerTransport();
 await server.connect(transport);

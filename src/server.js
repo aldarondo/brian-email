@@ -12,18 +12,29 @@ import { sendEmail, verifyConnection } from './mailer.js';
 import { listDrafts } from './gmail-api.js';
 import { log } from './logger.js';
 
-const sendTimestamps = [];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 
-function checkRateLimit() {
-  const limit = parseInt(process.env.EMAIL_RATE_LIMIT_PER_HOUR || '20', 10);
+const sendTimestamps = [];
+const draftTimestamps = [];
+
+function checkRateLimit(timestamps, envVar, defaultLimit, label) {
+  const limit = parseInt(process.env[envVar] || String(defaultLimit), 10);
   const cutoff = Date.now() - 60 * 60 * 1000;
-  const recent = sendTimestamps.filter(ts => ts > cutoff);
-  sendTimestamps.length = 0;
-  sendTimestamps.push(...recent);
+  const recent = timestamps.filter(ts => ts > cutoff);
+  timestamps.length = 0;
+  timestamps.push(...recent);
   if (recent.length >= limit) {
-    throw new Error(`Rate limit exceeded: max ${limit} emails/hour`);
+    throw new Error(`Rate limit exceeded: max ${limit} ${label}/hour`);
   }
-  sendTimestamps.push(Date.now());
+  timestamps.push(Date.now());
+}
+
+function validateEmailAddresses(to) {
+  const addresses = Array.isArray(to) ? to : [to];
+  for (const addr of addresses) {
+    if (!EMAIL_RE.test(addr)) throw new Error(`Invalid email address: ${addr}`);
+  }
 }
 
 export function createServer() {
@@ -86,7 +97,11 @@ export function createServer() {
           if (!to) throw new Error('"to" is required');
           if (!subject) throw new Error('"subject" is required');
           if (!body) throw new Error('"body" is required');
-          checkRateLimit();
+          validateEmailAddresses(to);
+          if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) {
+            throw new Error('Email body exceeds 10 MB limit');
+          }
+          checkRateLimit(sendTimestamps, 'EMAIL_RATE_LIMIT_PER_HOUR', 20, 'emails');
           const result = await sendEmail({ to, subject, text: body, html });
           log('info', 'email_sent', { to, subject, messageId: result.messageId });
           return {
@@ -102,6 +117,7 @@ export function createServer() {
         }
 
         case 'list_drafts': {
+          checkRateLimit(draftTimestamps, 'DRAFTS_RATE_LIMIT_PER_HOUR', 60, 'draft listings');
           const rawLimit = args?.limit ?? 10;
           const limit = Math.min(Math.max(Math.trunc(Number(rawLimit)), 1), 100);
           const query = args?.query ?? '';

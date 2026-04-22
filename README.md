@@ -41,18 +41,33 @@ docker compose logs -f
 
 The container pulls `ghcr.io/aldarondo/brian-email:latest` and runs the SSE server. The `.env` file must exist in the same directory on the NAS with credentials filled in.
 
+## Authentication
+
+The SSE server requires a `Bearer` token on every request. Set `MCP_API_KEY` in `.env` (generate with `openssl rand -hex 32`). Callers must send:
+
+```
+Authorization: Bearer <MCP_API_KEY value>
+```
+
+If `MCP_API_KEY` is unset the server starts but logs a warning and accepts all connections — suitable for local dev, not production.
+
 ## MCP Integration
 
-The server is registered in `brian-telegram/config/mcp.json` as `"email"`:
+The server is registered in `brian-telegram/config/mcp.json` as `"brian-email"`:
 
 ```json
 {
-  "email": {
+  "brian-email": {
     "type": "sse",
-    "url": "http://172.18.0.1:8768/sse"
+    "url": "http://172.18.0.1:8768/sse",
+    "headers": {
+      "Authorization": "Bearer ${BRIAN_EMAIL_API_KEY}"
+    }
   }
 }
 ```
+
+`BRIAN_EMAIL_API_KEY` must be set in `brian-telegram/.env` with the same value as `MCP_API_KEY` in `brian-email/.env`.
 
 ### Available Tools
 
@@ -61,14 +76,22 @@ The server is registered in `brian-telegram/config/mcp.json` as `"email"`:
 {
   "to": "recipient@example.com",
   "subject": "Hello",
-  "text": "Plain text body",
+  "body": "Plain text body",
   "html": "<p>Optional HTML body</p>"
 }
 ```
+`to` accepts a string or an array of strings. `html` is optional.
 
-**`test_connection`** — no arguments, returns `✅ Connected` or an error.
+**`test_connection`** — no arguments. Returns `✅ Gmail SMTP connection verified` or an error.
 
-**`list_drafts`** — no arguments, requires OAuth2 env vars set (see `.env.example`).
+**`list_drafts`**
+```json
+{
+  "limit": 10,
+  "query": "subject:invoice"
+}
+```
+Both fields are optional. `limit` is clamped to 1–100 (default: 10). Requires OAuth2 env vars (see `.env.example`).
 
 ## Environment Variables
 
@@ -76,9 +99,11 @@ The server is registered in `brian-telegram/config/mcp.json` as `"email"`:
 |---|---|---|
 | `GMAIL_USER` | Yes | Gmail address to send from |
 | `GMAIL_APP_PASSWORD` | Yes | Gmail App Password (not your account password) |
+| `MCP_API_KEY` | Yes (prod) | Bearer token for SSE auth — generate with `openssl rand -hex 32` |
 | `GMAIL_FROM_NAME` | No | Display name in From header (default: `Brian`) |
 | `PORT` | No | SSE server port (default: `8768`) |
-| `EMAIL_RATE_LIMIT_PER_HOUR` | No | Max emails per hour (default: `20`) |
+| `EMAIL_RATE_LIMIT_PER_HOUR` | No | Max `send_email` calls per hour (default: `20`) |
+| `DRAFTS_RATE_LIMIT_PER_HOUR` | No | Max `list_drafts` calls per hour (default: `60`) |
 | `LOG_FILE` | No | Path to log file inside container (default: none; set to `/logs/brian-email.log` in docker-compose) |
 | `LOG_MAX_SIZE_MB` | No | Max log file size before rotation in MB (default: `10`) |
 | `LOG_MAX_FILES` | No | Number of rotated log files to keep (default: `5`) |

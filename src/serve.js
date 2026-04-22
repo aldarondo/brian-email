@@ -7,6 +7,9 @@ import express from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createServer } from './server.js';
 import { requireApiKey } from './middleware.js';
+import { validateEnv } from './validate-env.js';
+
+validateEnv();
 
 const PORT = parseInt(process.env.PORT || '8768', 10);
 

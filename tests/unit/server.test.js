@@ -58,6 +58,21 @@ describe('send_email tool', () => {
     expect(result.content[0].text).toContain('"to" is required');
   });
 
+  test('returns error when "to" is not a valid email', async () => {
+    const client = await makeClient();
+    const result = await client.callTool({ name: 'send_email', arguments: { to: 'not-an-email', subject: 'Hi', body: 'Hello' } });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Invalid email address');
+  });
+
+  test('returns error when body exceeds 10 MB', async () => {
+    const client = await makeClient();
+    const bigBody = 'x'.repeat(11 * 1024 * 1024);
+    const result = await client.callTool({ name: 'send_email', arguments: { to: 'a@b.com', subject: 'Hi', body: bigBody } });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('10 MB');
+  });
+
   test('returns error when "subject" is missing', async () => {
     const client = await makeClient();
     const result = await client.callTool({ name: 'send_email', arguments: { to: 'a@b.com', body: 'Hello' } });
