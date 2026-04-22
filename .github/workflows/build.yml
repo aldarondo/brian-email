@@ -47,9 +47,13 @@ jobs:
         env:
           NAS_PASS: ${{ secrets.NAS_SSH_PASSWORD }}
           SSHPASS: ${{ secrets.NAS_SSH_PASSWORD }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=no \
             -o "ProxyCommand=cloudflared access ssh --hostname nas-ssh.aldarondo.family" \
             charles@nas-ssh.aldarondo.family \
-            "echo \"$NAS_PASS\" | sudo -S /usr/local/bin/docker compose -f /volume1/docker/brian-email/docker-compose.yml pull && \
+            "echo \"$NAS_PASS\" | sudo -S sed -i 's|^GMAIL_USER=.*|GMAIL_USER=$GMAIL_USER|' /volume1/docker/brian-email/.env && \
+             echo \"$NAS_PASS\" | sudo -S sed -i 's|^GMAIL_APP_PASSWORD=.*|GMAIL_APP_PASSWORD=$GMAIL_APP_PASSWORD|' /volume1/docker/brian-email/.env && \
+             echo \"$NAS_PASS\" | sudo -S /usr/local/bin/docker compose -f /volume1/docker/brian-email/docker-compose.yml pull && \
              echo \"$NAS_PASS\" | sudo -S /usr/local/bin/docker compose -f /volume1/docker/brian-email/docker-compose.yml up -d"
