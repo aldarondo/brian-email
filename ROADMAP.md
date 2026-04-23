@@ -36,3 +36,6 @@
 - [x] 2026-04-22 — Add rate limiting to `list_drafts` (60/hour via `DRAFTS_RATE_LIMIT_PER_HOUR`)
 - [x] 2026-04-22 — Add startup env validation (`src/validate-env.js`) — fails fast if `GMAIL_USER`/`GMAIL_APP_PASSWORD` missing
 - [x] 2026-04-22 — QA report written to `QA_REPORT.md`
+
+## 🚫 Blocked
+- ❌ [docker-monitor:no-ghcr-image] Container `brian-email` uses `node:20-alpine` — migrate to `ghcr.io/aldarondo/...` with a GitHub Actions build-push workflow — 2026-04-23 05:08 UTC
