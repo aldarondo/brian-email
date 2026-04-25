@@ -12,11 +12,13 @@
 - [ ] `[Human]` Copy `.env.example` → `.env`, fill in credentials, run `npm start` + `test_connection`
 
 ### Known Gaps (not blocking)
-- [ ] `[Code]` Add test coverage for `authorize.js` (interactive CLI — requires stdin mock)
-- [ ] `[Code]` Add integration tests (full MCP server against real Gmail API)
+- [x] `[Code]` 2026-04-23 — Add test coverage for `authorize.js` (interactive CLI — requires stdin mock)
+- [ ] `[Human]` Add integration tests (full MCP server against real Gmail API) — reassigned from [Code]: requires Gmail OAuth credentials with live API access; set up test Gmail account with App Password or OAuth tokens, then Claude Code can write the integration tests
 
 ## ✅ Completed
 
+- [x] 2026-04-24 — Upgrade Dockerfile base image: `node:20-alpine` → `node:22-alpine` (LTS). build.yml already pushes to GHCR; this ensures the built image uses the current LTS base. 47 tests pass.
+- [x] 2026-04-23 — Refactored `authorize.js` to export testable functions (`createAuthClient`, `generateAuthUrl`, `exchangeCode`, `runInteractiveFlow`) with execution guard; 11 new unit tests covering auth URL generation, code exchange, and interactive flow mocking (47 total)
 - [x] 2026-04-19 — Scaffolded: MCP server (send_email, test_connection), nodemailer wrapper, unit tests, Dockerfile, docker-compose
 - [x] 2026-04-19 — Add `list_drafts` tool — Gmail API OAuth (read-only scope); `src/gmail-api.js` + `src/authorize.js` interactive token flow
 - [x] 2026-04-19 — Add rate limiting (max N emails/hour) via `EMAIL_RATE_LIMIT_PER_HOUR` env var (default 20)
@@ -39,4 +41,4 @@
 
 ## 🚫 Blocked
 - ❌ [docker-monitor:container-stopped] Container `brian-email` is not running on the NAS — check `docker logs brian-email` and restart — 2026-04-23 08:42 UTC
-- ❌ [docker-monitor:no-ghcr-image] Container `brian-email` uses `node:20-alpine` — migrate to `ghcr.io/aldarondo/...` with a GitHub Actions build-push workflow — 2026-04-23 08:00 UTC
+- ⚠️ [docker-monitor:no-ghcr-image] Container `brian-email` — Dockerfile updated to `node:22-alpine`; GHCR workflow exists. Waiting for push → GitHub Actions build → NAS redeploy to resolve. Unblock: push changes, then restart NAS container.

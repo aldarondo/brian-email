@@ -19,3 +19,8 @@ services:
       - ./logs:/logs
     command: node src/serve.js
     network_mode: host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
