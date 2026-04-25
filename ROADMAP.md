@@ -17,6 +17,7 @@
 
 ## ✅ Completed
 
+- [x] 2026-04-25 — Fix non-ASCII encoding (em-dash, curly quotes, etc.): set `encoding:'quoted-printable'` explicitly in nodemailer; add HTML pass-through to REST endpoint; root cause was Windows shell mangling UTF-8 in curl — production HTTP clients unaffected
 - [x] 2026-04-24 — Upgrade Dockerfile base image: `node:20-alpine` → `node:22-alpine` (LTS). build.yml already pushes to GHCR; this ensures the built image uses the current LTS base. 47 tests pass.
 - [x] 2026-04-23 — Refactored `authorize.js` to export testable functions (`createAuthClient`, `generateAuthUrl`, `exchangeCode`, `runInteractiveFlow`) with execution guard; 11 new unit tests covering auth URL generation, code exchange, and interactive flow mocking (47 total)
 - [x] 2026-04-19 — Scaffolded: MCP server (send_email, test_connection), nodemailer wrapper, unit tests, Dockerfile, docker-compose
