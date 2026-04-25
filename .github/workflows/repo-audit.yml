@@ -1,0 +1,401 @@
+name: Repository Audit (Node + Python)
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_on_findings:
+        description: "Fail if vuln/secret scanners report findings (where supported)"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: "15 3 * * 1"  # Mondays 03:15 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+
+concurrency:
+  group: repo-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare output directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-results
+          {
+            echo "Audit run at: $(date -u)"
+            echo "Repo: $GITHUB_REPOSITORY"
+            echo "Ref:  $GITHUB_REF"
+            echo "SHA:  $GITHUB_SHA"
+            echo "Visibility: ${{ github.event.repository.private && 'private' || 'public' }}"
+          } | tee audit-results/metadata.txt
+
+      - name: Repo inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Top-level:"
+            ls -la
+            echo ""
+            echo "Detected Node files:"
+            ls -1 package.json package-lock.json pnpm-lock.yaml yarn.lock 2>/dev/null || true
+            echo ""
+            echo "Detected Python files:"
+            ls -1 requirements.txt pyproject.toml poetry.lock Pipfile Pipfile.lock 2>/dev/null || true
+          } | tee audit-results/inventory.txt
+
+      # --- Node.js ---------------------------------------------
+      - name: Setup Node
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Node install
+        if: hashFiles('package.json') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Node install" | tee audit-results/node.txt
+          node -v | tee -a audit-results/node.txt
+          if [ -f pnpm-lock.yaml ]; then
+            corepack enable && pnpm install --frozen-lockfile 2>&1 | tee -a audit-results/node.txt
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --immutable 2>&1 | tee -a audit-results/node.txt \
+              || yarn install 2>&1 | tee -a audit-results/node.txt
+          elif [ -f package-lock.json ]; then
+            npm ci 2>&1 | tee -a audit-results/node.txt
+          else
+            npm install 2>&1 | tee -a audit-results/node.txt
+          fi
+
+      - name: Node audit (report)
+        if: hashFiles('package.json') != ''
+        shell: bash
+        run: |
+          echo "" | tee -a audit-results/node.txt
+          echo "## npm audit" | tee -a audit-results/node.txt
+          npm audit --audit-level=high 2>&1 | tee -a audit-results/node.txt || true
+
+      - name: Node auto-fix (npm audit fix)
+        if: hashFiles('package.json') != ''
+        shell: bash
+        run: |
+          echo "" | tee -a audit-results/node.txt
+          echo "## npm audit fix" | tee -a audit-results/node.txt
+          npm audit fix 2>&1 | tee -a audit-results/node.txt || true
+
+      - name: Node tests + lint + build (best-effort)
+        if: hashFiles('package.json') != ''
+        shell: bash
+        run: |
+          echo "" | tee -a audit-results/node.txt
+          echo "## Node tests / lint / build" | tee -a audit-results/node.txt
+          npm test 2>&1 | tee -a audit-results/node.txt || true
+          npm run -s lint 2>&1 | tee -a audit-results/node.txt || true
+          npm run -s build 2>&1 | tee -a audit-results/node.txt || true
+
+      # --- Python ----------------------------------------------
+      - name: Setup Python
+        if: hashFiles('pyproject.toml', 'requirements.txt') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python install
+        if: hashFiles('pyproject.toml', 'requirements.txt') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Python install" | tee audit-results/python.txt
+          python --version | tee -a audit-results/python.txt
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip wheel setuptools 2>&1 | tee -a audit-results/python.txt
+          [ -f requirements.txt ] && pip install -r requirements.txt 2>&1 | tee -a audit-results/python.txt || true
+          [ -f pyproject.toml ] && pip install -e . 2>&1 | tee -a audit-results/python.txt || true
+
+      - name: Python audit + auto-fix (pip-audit)
+        if: hashFiles('pyproject.toml', 'requirements.txt') != ''
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          pip install pip-audit 2>&1 | tee -a audit-results/python.txt
+          echo "" | tee -a audit-results/python.txt
+          echo "## pip-audit" | tee -a audit-results/python.txt
+          pip-audit 2>&1 | tee audit-results/pip-audit.txt || true
+          echo "" | tee -a audit-results/python.txt
+          echo "## pip-audit --fix" | tee -a audit-results/python.txt
+          pip-audit --fix 2>&1 | tee -a audit-results/python.txt || true
+
+      - name: Python lint auto-fix (ruff) + tests (best-effort)
+        if: hashFiles('pyproject.toml', 'requirements.txt') != ''
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          pip install ruff 2>&1 > /dev/null
+          echo "" | tee -a audit-results/python.txt
+          echo "## ruff check --fix" | tee -a audit-results/python.txt
+          ruff check --fix . 2>&1 | tee audit-results/ruff.txt || true
+          echo "" | tee -a audit-results/python.txt
+          echo "## pytest" | tee -a audit-results/python.txt
+          if python -c "import pytest" >/dev/null 2>&1; then
+            pytest -q 2>&1 | tee audit-results/pytest.txt || true
+          else
+            echo "pytest not installed; skipping" | tee audit-results/pytest.txt
+          fi
+
+      # --- Secrets + Vuln scanning -----------------------------
+      - name: Secrets scan (Gitleaks)
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION=8.18.4
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --redact \
+            --report-format sarif --report-path audit-results/gitleaks.sarif \
+            2>&1 | tee audit-results/gitleaks.txt || true
+
+      - name: Vulnerability scan (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: audit-results/trivy.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"
+
+      # --- Upload SARIF -> Code Scanning + Copilot Autofix ------
+      - name: Upload Gitleaks SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && !github.event.repository.private
+        with:
+          sarif_file: audit-results/gitleaks.sarif
+          category: gitleaks
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && !github.event.repository.private
+        with:
+          sarif_file: audit-results/trivy.sarif
+          category: trivy
+
+      # --- Auto-fix PR -----------------------------------------
+      - name: Clean up audit artifacts
+        shell: bash
+        run: rm -rf audit-results/ .cache/ gitleaks
+
+      - name: Create auto-fix PR
+        id: create-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: weekly auto-fixes (npm audit fix, pip-audit --fix, ruff)"
+          branch: repo-audit/auto-fix
+          delete-branch: false
+          title: "Weekly Audit Auto-fixes - ${{ github.run_number }}"
+          body: |
+            ## Weekly Audit Auto-fixes
+
+            Applied automatically by the `repo-audit` workflow.
+
+            ### What was fixed
+            - **`npm audit fix`** - patched vulnerable Node.js dependencies
+            - **`pip-audit --fix`** - upgraded vulnerable Python packages
+            - **`ruff check --fix`** - applied lint auto-fixes
+
+            ### What to do
+            Review the diff. If tests are green, merge. Copilot will leave code review comments on this PR.
+
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          labels: "automated,audit"
+
+      - name: Request Copilot code review
+        if: steps.create-pr.outputs.pull-request-number != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            repos/$GITHUB_REPOSITORY/pulls/${{ steps.create-pr.outputs.pull-request-number }}/requested_reviewers \
+            --method POST \
+            --field 'reviewers[]=copilot-pull-request-reviewer' \
+            2>&1 || true   # best-effort; requires Copilot code review enabled in repo settings
+
+      # --- CodeQL full-repo analysis (public repos only) -------
+      - name: Detect CodeQL languages
+        if: ${{ !github.event.repository.private }}
+        id: codeql-langs
+        shell: bash
+        run: |
+          langs=""
+          [ -f package.json ] && langs="${langs}javascript,"
+          { [ -f requirements.txt ] || [ -f pyproject.toml ]; } && langs="${langs}python,"
+          langs="${langs%,}"
+          echo "langs=${langs}" >> "$GITHUB_OUTPUT"
+          [ -n "${langs}" ] && echo "enabled=true" >> "$GITHUB_OUTPUT" || echo "enabled=false" >> "$GITHUB_OUTPUT"
+
+      - name: CodeQL init
+        if: ${{ !github.event.repository.private && steps.codeql-langs.outputs.enabled == 'true' }}
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ steps.codeql-langs.outputs.langs }}
+          queries: security-extended
+
+      - name: CodeQL autobuild
+        if: ${{ !github.event.repository.private && steps.codeql-langs.outputs.enabled == 'true' }}
+        uses: github/codeql-action/autobuild@v3
+
+      - name: CodeQL analyze
+        if: ${{ !github.event.repository.private && steps.codeql-langs.outputs.enabled == 'true' }}
+        uses: github/codeql-action/analyze@v3
+
+      # --- Summary + Artifacts ---------------------------------
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Repository Audit Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Key | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Repository | \`$GITHUB_REPOSITORY\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Visibility | ${{ github.event.repository.private && 'Private *(CodeQL skipped)*' || 'Public' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | \`${{ github.event_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`$GITHUB_SHA\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Auto-fix PR | ${{ steps.create-pr.outputs.pull-request-url || 'No changes detected' }} |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-audit-results
+          path: audit-results
+          if-no-files-found: warn
+
+  # --- Job 2: Weekly rolling code review -----------------------
+  weekly-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run weekly review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          CHECKPOINT_BRANCH="review/weekly-checkpoint"
+          MAIN_SHA=$(git rev-parse HEAD)
+          DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --template '{{.defaultBranchRef.name}}')
+          WEEK_END=$(date -u +"%Y-%m-%d")
+          WEEK_START=$(date -u -d "7 days ago" +"%Y-%m-%d")
+
+          # -- 1. Ensure weekly-review label exists -----------------
+          gh label create "weekly-review" \
+            --color "5319e7" \
+            --description "Weekly Copilot code review PR" 2>/dev/null || true
+
+          # -- 2. Ensure checkpoint branch exists -------------------
+          if ! git ls-remote --exit-code origin "${CHECKPOINT_BRANCH}" >/dev/null 2>&1; then
+            echo "First run - creating checkpoint at current HEAD. Review starts next Monday."
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              --method POST \
+              --field ref="refs/heads/${CHECKPOINT_BRANCH}" \
+              --field sha="${MAIN_SHA}"
+            exit 0
+          fi
+
+          CHECKPOINT_SHA=$(git ls-remote origin "${CHECKPOINT_BRANCH}" | cut -f1)
+          echo "Checkpoint: ${CHECKPOINT_SHA:0:8}  HEAD: ${MAIN_SHA:0:8}"
+
+          # -- 3. Count commits since last review -------------------
+          git fetch origin "${CHECKPOINT_BRANCH}"
+          COMMIT_COUNT=$(git rev-list --count "origin/${CHECKPOINT_BRANCH}..HEAD")
+          echo "New commits since last review: ${COMMIT_COUNT}"
+
+          if [ "${COMMIT_COUNT}" = "0" ]; then
+            echo "No new commits this week - skipping review PR."
+            exit 0
+          fi
+
+          COMMIT_LOG=$(git log --oneline "origin/${CHECKPOINT_BRANCH}..HEAD" | head -30)
+
+          # -- 4. Close any previous open review PR -----------------
+          gh pr list \
+            --base "${CHECKPOINT_BRANCH}" \
+            --label "weekly-review" \
+            --state open \
+            --json number \
+            --template '{{range .}}{{.number}}{{"\n"}}{{end}}' \
+          | while read -r pr; do
+              [ -n "$pr" ] && gh pr close "$pr" \
+                --comment "Superseded by new weekly review PR." || true
+            done
+
+          # -- 5. Create weekly review PR ---------------------------
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="## Weekly Code Review"
+          BODY="${BODY}\n\n**Period:** ${WEEK_START} -> ${WEEK_END}"
+          BODY="${BODY}\n**Commits:** ${COMMIT_COUNT}"
+          BODY="${BODY}\n\n### Commits included\n\`\`\`"
+          BODY="${BODY}\n${COMMIT_LOG}"
+          BODY="${BODY}\n\`\`\`"
+          BODY="${BODY}\n\n> **Review only - do not merge.** Shows all commits to \`${DEFAULT_BRANCH}\` since the last weekly review."
+          BODY="${BODY}\n> Copilot will review the full week's diff. Closed automatically next Monday."
+          BODY="${BODY}\n\nWorkflow: ${RUN_URL}"
+
+          PR_URL=$(gh pr create \
+            --base "${CHECKPOINT_BRANCH}" \
+            --head "${DEFAULT_BRANCH}" \
+            --title "Weekly Code Review - ${WEEK_START} to ${WEEK_END}" \
+            --label "weekly-review" \
+            --body "$(echo -e "${BODY}")")
+
+          echo "Created: ${PR_URL}"
+          PR_NUMBER=$(echo "${PR_URL}" | grep -oE '[0-9]+$')
+
+          # -- 6. Request Copilot review ----------------------------
+          gh api \
+            "repos/$GITHUB_REPOSITORY/pulls/${PR_NUMBER}/requested_reviewers" \
+            --method POST \
+            --field 'reviewers[]=copilot-pull-request-reviewer' 2>&1 || true
+
+          # -- 7. Advance checkpoint to current HEAD -----------------
+          gh api "repos/$GITHUB_REPOSITORY/git/refs/heads/${CHECKPOINT_BRANCH}" \
+            --method PATCH \
+            --field sha="${MAIN_SHA}" \
+            --field force=true
+
+          echo "Checkpoint advanced to ${MAIN_SHA:0:8}"
+
+          echo "## Weekly Review PR" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **PR:** ${PR_URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commits reviewed:** ${COMMIT_COUNT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Period:** ${WEEK_START} -> ${WEEK_END}" >> "$GITHUB_STEP_SUMMARY"

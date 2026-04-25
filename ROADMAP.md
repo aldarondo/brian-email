@@ -40,5 +40,5 @@
 - [x] 2026-04-22 — QA report written to `QA_REPORT.md`
 
 ## 🚫 Blocked
-- ❌ [docker-monitor:container-stopped] Container `brian-email` is not running on the NAS — check `docker logs brian-email` and restart — 2026-04-23 08:42 UTC
+- ❌ [docker-monitor:deploy-failed] GitHub Actions deploy failed (run #24920109020) — https://github.com/aldarondo/brian-email/actions/runs/24920109020 — 2026-04-25 08:00 UTC
 - ⚠️ [docker-monitor:no-ghcr-image] Container `brian-email` — Dockerfile updated to `node:22-alpine`; GHCR workflow exists. Waiting for push → GitHub Actions build → NAS redeploy to resolve. Unblock: push changes, then restart NAS container.
