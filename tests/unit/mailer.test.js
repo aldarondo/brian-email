@@ -38,6 +38,14 @@ describe('sendEmail', () => {
     expect(result).toEqual({ messageId: 'msg-001' });
   });
 
+  test('sets encoding to quoted-printable for correct non-ASCII handling', async () => {
+    mockSendMail.mockResolvedValue({ messageId: 'msg-enc' });
+    await sendEmail({ to: 'x@example.com', subject: 'Em—dash test', text: 'Hello — world' });
+    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({
+      encoding: 'quoted-printable',
+    }));
+  });
+
   test('joins multiple recipients with comma', async () => {
     mockSendMail.mockResolvedValue({ messageId: 'msg-002' });
 

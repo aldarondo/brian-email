@@ -31,6 +31,9 @@ export async function sendEmail({ to, subject, text, html }) {
     subject,
     text,
     html,
+    // Force quoted-printable transfer encoding so non-ASCII characters
+    // (em-dashes, curly quotes, accented letters, etc.) survive intact.
+    encoding: 'quoted-printable',
   });
   return { messageId: info.messageId };
 }

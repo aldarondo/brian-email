@@ -19,13 +19,13 @@ const transports = new Map();
 // Simple REST endpoint — bypasses the MCP SSE handshake for direct callers
 // (e.g. the coordinator's Python email_mcp.py, which has a protocol mismatch with the JS SSE SDK).
 app.post('/api/send-email', express.json(), requireApiKey, async (req, res) => {
-  const { to, subject, body } = req.body ?? {};
+  const { to, subject, body, html } = req.body ?? {};
   if (!to || !subject || !body) {
     return res.status(400).json({ error: 'Missing required fields: to, subject, body' });
   }
   try {
     const { sendEmail } = await import('./mailer.js');
-    const result = await sendEmail({ to, subject, text: body });
+    const result = await sendEmail({ to, subject, text: body, html });
     return res.json({ ok: true, messageId: result.messageId });
   } catch (err) {
     console.error('[REST /api/send-email] failed:', err.message);
