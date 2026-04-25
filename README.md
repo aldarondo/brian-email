@@ -11,7 +11,7 @@ MCP server that sends outbound email via a dedicated Gmail account. Deployed on 
 ## Tech Stack
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js 20 (Alpine) |
+| Runtime | Node.js 22 (Alpine) |
 | Transport | MCP SSE (`src/serve.js`) on port 8768 |
 | Email | nodemailer + Gmail SMTP (App Password) |
 | Draft listing | Gmail API (OAuth2, optional) |
@@ -50,6 +50,25 @@ Authorization: Bearer <MCP_API_KEY value>
 ```
 
 If `MCP_API_KEY` is unset the server starts but logs a warning and accepts all connections — suitable for local dev, not production.
+
+## REST Endpoint
+
+For callers that can't speak the MCP SSE handshake protocol (e.g. Python coordinators), a plain REST endpoint is available:
+
+```
+POST /api/send-email
+Authorization: Bearer <MCP_API_KEY>
+Content-Type: application/json
+
+{
+  "to": "recipient@example.com",
+  "subject": "Hello",
+  "body": "Plain-text body",
+  "html": "<p>Optional HTML body</p>"
+}
+```
+
+Returns `{"ok": true, "messageId": "..."}` on success, or `{"error": "..."}` with a 4xx/5xx status on failure. `html` is optional — when omitted, a plain-text-only email is sent.
 
 ## MCP Integration
 

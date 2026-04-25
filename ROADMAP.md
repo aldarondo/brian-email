@@ -6,17 +6,14 @@
 
 ## 🔲 Backlog
 
-### Deployment
-- [ ] `[Human]` Enable 2FA on Brian Gmail account (required for App Passwords)
-- [ ] `[Human]` Create Gmail App Password at https://myaccount.google.com/apppasswords
-- [ ] `[Human]` Copy `.env.example` → `.env`, fill in credentials, run `npm start` + `test_connection`
-
 ### Known Gaps (not blocking)
-- [x] `[Code]` 2026-04-23 — Add test coverage for `authorize.js` (interactive CLI — requires stdin mock)
-- [ ] `[Human]` Add integration tests (full MCP server against real Gmail API) — reassigned from [Code]: requires Gmail OAuth credentials with live API access; set up test Gmail account with App Password or OAuth tokens, then Claude Code can write the integration tests
+- [ ] `[Human]` Add integration tests (full MCP server against real Gmail API) — requires Gmail OAuth credentials with live API access; set up test Gmail account with App Password or OAuth tokens, then Claude Code can write the integration tests
 
 ## ✅ Completed
 
+- [x] 2026-04-25 — Add `POST /api/send-email` REST endpoint for direct callers (e.g. Python coordinators) that bypass the MCP SSE handshake; supports plain-text and HTML; 8 new unit tests (55 total)
+- [x] 2026-04-25 — Add docker-compose log rotation: `json-file` driver, 10 MB / 5 files
+- [x] 2026-04-25 — Deployed and live-tested: `send_email` with plain-text, HTML, and non-ASCII characters verified against charles.aldarondo@gmail.com
 - [x] 2026-04-25 — Fix non-ASCII encoding (em-dash, curly quotes, etc.): set `encoding:'quoted-printable'` explicitly in nodemailer; add HTML pass-through to REST endpoint; root cause was Windows shell mangling UTF-8 in curl — production HTTP clients unaffected
 - [x] 2026-04-24 — Upgrade Dockerfile base image: `node:20-alpine` → `node:22-alpine` (LTS). build.yml already pushes to GHCR; this ensures the built image uses the current LTS base. 47 tests pass.
 - [x] 2026-04-23 — Refactored `authorize.js` to export testable functions (`createAuthClient`, `generateAuthUrl`, `exchangeCode`, `runInteractiveFlow`) with execution guard; 11 new unit tests covering auth URL generation, code exchange, and interactive flow mocking (47 total)
@@ -41,5 +38,4 @@
 - [x] 2026-04-22 — QA report written to `QA_REPORT.md`
 
 ## 🚫 Blocked
-- ❌ [docker-monitor:deploy-failed] GitHub Actions deploy failed (run #24920109020) — https://github.com/aldarondo/brian-email/actions/runs/24920109020 — 2026-04-25 08:00 UTC
-- ⚠️ [docker-monitor:no-ghcr-image] Container `brian-email` — Dockerfile updated to `node:22-alpine`; GHCR workflow exists. Waiting for push → GitHub Actions build → NAS redeploy to resolve. Unblock: push changes, then restart NAS container.
+<!-- none -->
